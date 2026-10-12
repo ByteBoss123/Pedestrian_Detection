@@ -23,7 +23,7 @@ def export(ckpt_path=None, out_path="pedestrian.onnx", img_size=640):
         print("[export] onnx / onnxruntime not installed — skipping ONNX check.")
         onnx = None
 
-    model = PedestrianDetector()
+    model = PedestrianDetector(pretrained=False)  # weights come from the checkpoint; no ImageNet download needed
     if ckpt_path is not None:
         ckpt = torch.load(ckpt_path, map_location="cpu")
         state = ckpt["model"] if "model" in ckpt else ckpt

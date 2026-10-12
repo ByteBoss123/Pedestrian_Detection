@@ -1,57 +1,34 @@
-# Pedestrian Detector — MobileNetV2 + FPN
+# Pedestrian Detector Components: MobileNetV2 + FPN, CIoU Loss, Mosaic, NMS
 
-PyTorch object detector trained on the MS COCO person subset.
+A from-scratch implementation of the building blocks of a single-stage person detector in PyTorch, with a unit
+test for each and an ONNX export path for CPU deployment.
 
-## Results
-| Metric | Value |
-|---|---|
-| mAP@50 (overall) | 0.71 |
-| mAP@50 (small)   | 0.44 |
-| mAP@50 (large)   | 0.71 |
-| CPU latency (ONNX) | 38 ms |
-| Device budget | 50 ms |
+## Status: components, not a trained detector
 
-## Project layout
+An earlier version of this README reported mAP@50 of 0.71 on COCO persons. **There is no evidence that a training
+run happened**: `train.py` imports a COCO dataset loader (`data/coco_person.py`) that was never written, no
+checkpoint or evaluation output exists, and the README offered no log. Those numbers have been removed. What is
+here and verified:
+
+| Component | File | Verified by |
+|---|---|---|
+| MobileNetV2 backbone + FPN neck (P3/P4/P5) | `model/fpn_neck.py` | output count, channels and stride order tests |
+| Anchor-based detection heads | `model/detector.py` | output shapes, no NaNs, variable input sizes |
+| Complete-IoU loss (Zheng et al., AAAI 2020) | `loss/ciou_loss.py` | identical boxes give 0, disjoint boxes give high loss, gradients flow |
+| 4-image mosaic augmentation | `data/mosaic_aug.py` | output shape, box remapping and clipping |
+| Greedy NMS in pure PyTorch | `postprocess/nms.py` | matches expected suppression, IoU correctness |
+| ONNX export + CPU latency probe | `scripts/export_onnx.py` | ONNX graph check, onnxruntime inference |
+
 ```
-pedestrian_detector/
-├── model/
-│   ├── fpn_neck.py       MobileNetV2 backbone + FPN neck (P3/P4/P5)
-│   └── detector.py       Detection heads + full model
-├── loss/
-│   └── ciou_loss.py      Complete IoU loss (Zheng et al., AAAI 2020)
-├── data/
-│   └── mosaic_aug.py     4-image mosaic augmentation
-├── postprocess/
-│   └── nms.py            Pure-PyTorch greedy NMS
-├── scripts/
-│   └── export_onnx.py    ONNX export + latency probe
-├── train.py              Training loop (SGD + cosine LR + AMP)
-└── test_all.py           Full test suite (26 tests)
-```
-
-## Install
-```bash
-pip install torch torchvision opencv-python
-# optional — for ONNX export
-pip install onnx onnxruntime
-```
-
-## Run tests
-```bash
-cd pedestrian_detector
-python test_all.py
-```
-
-## Export to ONNX
-```bash
+python test_all.py       # 26 tests, all pass (October 2026)
 python scripts/export_onnx.py --out pedestrian.onnx
 ```
 
-## Train
-```python
-from types import SimpleNamespace
-from train import train
+## What is needed to make it a detector
 
-cfg = SimpleNamespace(data_root="/path/to/coco", bs=16, epochs=50)
-train(cfg)
-```
+1. `data/coco_person.py`: a COCO person-only dataset that feeds `mosaic4` and produces anchor targets.
+2. A GPU training run (`train.py`) and an evaluation script reporting COCO-style mAP@50 by object size.
+3. Re-run the ONNX latency probe on the trained checkpoint.
+
+Until then, this repo shows detector engineering (architecture, loss, augmentation, post-processing, export), not
+detection accuracy.
